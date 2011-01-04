@@ -7,8 +7,9 @@ DATABASE_FILE = 'wb_sms_water.sqlite'
 
 #HTML constants
 PREFIX = '<html>'
-HEAD = "<head><title>West Bengal SMS Water Reports: %s</title></head>"
-BODY = "<body>%s</body>"
+BRAINS = '<style type="text/css">body{ background-color: #ddd; font-size: 3em; font-family: sans-serif; text-align: center; padding: 1em; } .special { background-color: #333; color: #fff; padding: .25em; } </style>' #.special:hover { text-decoration: underline; }
+HEAD = "<head>\n\t<title>West Bengal SMS Water Reports: %s</title>\n #{BRAINS} </head>\n"
+BODY = '<body>%s</body>'
 SUFFIX = '</html>'
 
 helpers do
@@ -25,7 +26,9 @@ end
 
 
 get '/' do
-  PREFIX + (HEAD % "Overview") + (BODY % "There are #{q('select count(*) from wb_water_sms')} reports to dig into!") + SUFFIX
+  query = q('select count(*) from wb_water_sms')
+  body = "There are <span class=\"special\">#{query}</span> reports to dig into!"
+  PREFIX + (HEAD % 'Overview') + (BODY % body) + SUFFIX
 end
 
 
