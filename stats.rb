@@ -84,7 +84,8 @@ helpers do
     ret = default
     if curr
       sym = curr.to_s.downcase.to_sym
-      ret = sym if allowed.include?(sym)
+      #raise NotImplementedError, curr.to_s unless
+      ret = sym if allowed.include?(sym) #this shouldn't fail silently...
     end
     ret
   end
@@ -94,7 +95,7 @@ helpers do
     "<p>There are <span class=\"special\">#{query}</span> reports to dig into!</p>"
   end
   
-  def histogram()
+  def histogram_query()
     first_ts = Time.parse(q('select date from wb_water_sms order by date asc limit 1')).to_i
     num_samples = q('select count(*) from wb_water_sms').to_i
     #TODO static date that limits us to the data we have, future dates are not possible
@@ -114,6 +115,11 @@ helpers do
       #the running sum is the total that we had as of each time period
       counts << q(query).to_i
     end
+    [counts, times, num_samples]
+  end
+  
+  def histogram()
+    counts, times, num_samples = histogram_query()
 
     url = "http://chart.apis.google.com/chart?" + 
       "cht=lc" + #lxy" + 
@@ -164,6 +170,14 @@ helpers do
 
     PREFIX + (HEAD % html_title) + (BODY % body) + SUFFIX
   end
+  
+  def not_found_page()
+    PREFIX + (HEAD % 'Not found') + (BODY % "We couldn't find what your'e looking for, shoot us an e-mail and we'll see what we can do.") + SUFFIX
+  end
+  
+  def not_implemented_page(error)
+    PREFIX + (HEAD % 'Not found') + (BODY % "We haven't figured out how to do #{error} yet, but shoot us an e-mail and we'll try to get it done!") + SUFFIX
+  end
 end
 
 ##########
@@ -172,6 +186,14 @@ end
 
 before do
   @db = SQLite3::Database.open(DATABASE_FILE)
+end
+
+not_found do 
+  not_found_page()
+end 
+
+error NotImplementedError do
+  not_implemented_page(request.env['sinatra.error'].message)
 end
 
 ##########
@@ -200,7 +222,7 @@ get '/' do
     when :histogram
       ret = histogram_page()
     else
-      ret = "We haven't figured out how to do that yet, but shoot us an e-mail and we'll try to get it done!"
+      ret = not_implemented_page()
     end
   end
   ret
