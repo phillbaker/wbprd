@@ -91,12 +91,12 @@ helpers do
     ret
   end
   
-  def counts(where = '') #location = {}, type = nil, report
+  def counts(select, where) #location = {}, type = nil, report
     query = q('select count(*) from wb_water_sms' + (where.empty? ? where : " where #{where}"))
     "<p>There are <span class=\"special\">#{query}</span> reports to dig into!</p>"
   end
   
-  def histogram_query(where = '')
+  def histogram_query(where)
     where = where.empty? ? where : " where #{where} "
     first_ts = Time.parse(q("select date from wb_water_sms #{where} order by date asc limit 1")).to_i
     num_samples = q("select count(*) from wb_water_sms #{where} ").to_i
@@ -143,25 +143,25 @@ helpers do
     html_title = 'Overview'
 
     page_title = '<h1>Lumin Reports</h1><h2>(West Bengal SMS Data)</h2>'
-    p1 = counts()
+    p1 = counts('', '')
     p2 = "<p class=\"notes\">For example, see this <a href=\"/?operation=histogram\">histogram</a>.</p>"
     body = page_title + p1 + p2
 
     PREFIX + (HEAD % html_title) + (BODY % body) + SUFFIX
   end
 
-  def count_page(where)
+  def count_page(select = '', where = '')
     html_title = 'Counts'
 
     page_title = '<h1>Counts of SMS Water Data (West Bengal)</h2>'
-    p1 = counts(where)
+    p1 = counts(select, where)
     p2 = "<p class=\"notes\">For example, see this <a href=\"/?operation=histogram\">histogram</a>.</p>"
     body = page_title + p1 + p2
 
     PREFIX + (HEAD % html_title) + (BODY % body) + SUFFIX
   end
   
-  def histogram_page(where)
+  def histogram_page(select = '', where = '')
     html_title = 'Data histogram'
 
     page_title = '<h1>Histogram of SMS Water Data (West Bengal)</h1>'
@@ -226,9 +226,9 @@ get '/' do
     #break it down by operation, then feed the operation the geo, contaminent, time 
     case query_vars[:operation]
     when :count
-      ret = count_page(form_where(query_vars))
+      ret = count_page('', form_where(query_vars))
     when :histogram
-      ret = histogram_page(form_where(query_vars))
+      ret = histogram_page('', form_where(query_vars))
     else
       ret = not_implemented_page()
     end
