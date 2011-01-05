@@ -184,9 +184,9 @@ helpers do
   end
   
   def form_where(vars)
-    where = ''
-    where += " type = '#{vars[:type]}' " if vars[:type]
-    where
+    where = []
+    where << " type = '#{vars[:type]}' " if vars[:type]
+    where.join(' and ')
   end
 end
 
