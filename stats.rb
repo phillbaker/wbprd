@@ -61,7 +61,7 @@ helpers do
       :hamlet => [nil], 
       :well => [nil], 
       :type => [:public, :private, nil],  #TODO #:public, :private, 
-      :report => [nil], 
+      :report => [:arsenic,:tds,:salinity,:fluoride,:iron,:tc,:fc,:ph,:hardness,nil], 
       :time => [nil], 
       :operation => [:count, :histogram]
     }
@@ -182,6 +182,12 @@ helpers do
   def not_implemented_page(error)
     PREFIX + (HEAD % 'Not found') + (BODY % "We haven't figured out how to do #{error} yet, but shoot us an e-mail and we'll try to get it done!") + SUFFIX
   end
+  
+  def form_where(vars)
+    where = ''
+    where += " type = '#{vars[:type]}' " if vars[:type]
+    where
+  end
 end
 
 ##########
@@ -220,13 +226,9 @@ get '/' do
     #break it down by operation, then feed the operation the geo, contaminent, time 
     case query_vars[:operation]
     when :count
-      where = ''
-      where += " type = '#{query_vars[:type]}' " if query_vars[:type]
-      ret = count_page(where)
+      ret = count_page(form_where(query_vars))
     when :histogram
-      where = ''
-      where += " type = '#{query_vars[:type]}' " if query_vars[:type]
-      ret = histogram_page(where)
+      ret = histogram_page(form_where(query_vars))
     else
       ret = not_implemented_page()
     end
