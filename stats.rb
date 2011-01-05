@@ -54,10 +54,8 @@ helpers do
       :time => [nil], 
       :operation => [:count, :histogram]
     }
-    puts '-------'
     #need to convert string values of keys to symbols
     ret = defaults.merge(opts.inject({}){|hsh,(k,v)| hsh[k.to_sym] = v; hsh}) 
-    puts(ret[:operation])
     #TODO the below is poorly executed, there's gotta be a better way to do this
     #TODO check all the geo data to make sure it exists/it's sanitary
     #check the type
@@ -68,7 +66,6 @@ helpers do
     ret[:time] = check_allowed_param(defaults[:time], allowed_options[:time], ret[:time])
     #check the operation,
     ret[:operation] = check_allowed_param(defaults[:operation], allowed_options[:operation], ret[:operation])
-    puts(ret[:operation])
     ret
   end
   
@@ -84,7 +81,7 @@ helpers do
   
   def counts() #location = {}, type = nil, report
     query = q('select count(*) from wb_water_sms')
-    "<p>There are <span class=\"special\">#{query}</span> reports to dig into for !</p>"
+    "<p>There are <span class=\"special\">#{query}</span> reports to dig into!</p>"
   end
   
   def histogram()
@@ -165,7 +162,6 @@ end
 ##########
 
 get '/' do
-  puts(params[:operation])
   query_vars = process_params(params)
   
   #get rid of all nil values
@@ -183,9 +179,6 @@ get '/' do
     when :histogram
       ret = histogram_page()
     else
-      p query_vars
-      puts query_vars[:operation]
-      puts query_vars[:operation] == :histogram
       ret = "We haven't figured out how to do that yet, but shoot us an e-mail and we'll try to get it done!"
     end
   end
