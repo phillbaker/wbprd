@@ -28,15 +28,15 @@ module LuminWestBengalSms
       "CREATE TABLE #{table_name()} (
         id integer primary key autoincrement, 
         date date,
-        district text,
-        block text,
-        panchayat text,
-        mouza text,
-        type text,
-        source text,
-        hamlet text,
-        lab text,
-        code text,
+        district text,                          --
+        block text,                             --
+        panchayat text,                         --geo?
+        mouza text,                             --geo?
+        type text,                              --public/private
+        source text,                            --?
+        hamlet text,                            --village?
+        lab text,                               --
+        code text,                              --actual description of well location
         arsenic NUMERIC,
         tds NUMERIC,
         salinity NUMERIC,
@@ -60,8 +60,13 @@ module LuminWestBengalSms
         d = o[0].split('/')
         o[0] = Date.civil(d.last.to_i, d[1].to_i, d.first.to_i).to_s
         
-        o.each do |p|
-          p.chomp.downcase! if p && p.respond_to?(:downcase)
+        (1..9).each do |i|
+          p = o[i]
+          if p && p.respond_to?(:downcase)
+            p = p.strip
+            p = p.downcase
+          end
+          o[i] = p
         end
       end
       
@@ -71,6 +76,8 @@ module LuminWestBengalSms
     end
 
     def write_table db, columns, data
+      orig = STDOUT.sync
+      STDOUT.sync = true
       data.each_with_index do |o,i|
         begin
           write_row(db, columns, o)
@@ -78,10 +85,10 @@ module LuminWestBengalSms
         rescue SQLite3::SQLException => e
           p o
           exit(1)
-        ensure
-          puts '' #clearing line
         end
       end
+      STDOUT.sync = orig
+      puts '' #clearing line
     end
   
     #Date,District,Block,Panchayat,Mouza,Type,Source,Hamlet,Lab,Code,Arsenic,TDS,Salinity,Fluoride,Iron,TC,FC,PH,Hardness
