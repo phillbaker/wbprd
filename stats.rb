@@ -24,14 +24,73 @@ helpers do
     @db.get_first_value(query)
   end
   
-  def counts()
+  #sanizite and set to known state for query params
+  def process_params(opts)
+    #nil should default to all for most of these, use empty strings here so we can check for allowed values easily below
+    defaults = {
+      :district => nil, #the below are all geo locations
+      :block => nil,
+      :panchayat => nil,
+      :mouza => nil,
+      :hamlet => nil,
+      :well => nil, #end of geo locations
+      :type => nil, #public/private/both
+      :report => nil, #what contaminant to report on, nil is simply a record in the db (ie all)
+      :time => nil, #defaults to all records in existence
+      :operation => :count #reports, histogram, cot (change over time), coverage; defaults to counts of records
+      #TODO if we're really just serving data, we should probably put a max number of records...
+      #also be ready for a format
+    }
+    
+    allowed_options = { # TODO the good way to do this would be to see if we respond_to?(:operation) or it's in the table
+      :district => [nil], 
+      :block => [nil], 
+      :panchayat => [nil], 
+      :mouza => [nil], 
+      :hamlet => [nil], 
+      :well => [nil], 
+      :type => [:public, :private, nil],  #TODO #:public, :private, 
+      :report => [nil], 
+      :time => [nil], 
+      :operation => [:count, :histogram]
+    }
+    puts '-------'
+    #need to convert string values of keys to symbols
+    ret = defaults.merge(opts.inject({}){|hsh,(k,v)| hsh[k.to_sym] = v; hsh}) 
+    puts(ret[:operation])
+    #TODO the below is poorly executed, there's gotta be a better way to do this
+    #TODO check all the geo data to make sure it exists/it's sanitary
+    #check the type
+    ret[:type] = check_allowed_param(defaults[:type], allowed_options[:type], ret[:type])  
+    #check the report
+    ret[:report] = check_allowed_param(defaults[:report], allowed_options[:report], ret[:report])
+    #check the time
+    ret[:time] = check_allowed_param(defaults[:time], allowed_options[:time], ret[:time])
+    #check the operation,
+    ret[:operation] = check_allowed_param(defaults[:operation], allowed_options[:operation], ret[:operation])
+    puts(ret[:operation])
+    ret
+  end
+  
+  #allowed should be an array of symbols
+  def check_allowed_param(default, allowed, curr)
+    ret = default
+    if curr
+      sym = curr.to_s.downcase.to_sym
+      ret = sym if allowed.include?(sym)
+    end
+    ret
+  end
+  
+  def counts() #location = {}, type = nil, report
     query = q('select count(*) from wb_water_sms')
-    "<p>There are <span class=\"special\">#{query}</span> reports to dig into!</p>"
+    "<p>There are <span class=\"special\">#{query}</span> reports to dig into for !</p>"
   end
   
   def histogram()
     first_ts = Time.parse(q('select date from wb_water_sms order by date asc limit 1')).to_i
     num_samples = q('select count(*) from wb_water_sms').to_i
+    #TODO exclude future dates...not possible
     last_ts = Time.parse(q('select date from wb_water_sms order by date desc limit 1')).to_i
 
     #divide the total time that data has been collected into 10 buckets (alright 11 with the initial 0)
@@ -62,6 +121,35 @@ helpers do
     
     "<img src=\"#{url}\" alt=\"A sweet google chart, that you're not seeting, unfortunately.\" title=\"Histogram\" />"
   end
+
+  def main_page()
+    count_page()
+  end
+
+  def count_page()
+    html_title = 'Overview'
+
+    page_title = '<h1>Lumin Reports (West Bengal SMS Data)</h1>'
+    p1 = counts()
+    p2 = "<p class=\"notes\">For example, see this <a href=\"/?operation=histogram\">histogram</a>.</p>"
+    body = page_title + p1 + p2
+
+    PREFIX + (HEAD % html_title) + (BODY % body) + SUFFIX
+  end
+  
+  def histogram_page()
+    html_title = 'Data histogram'
+
+    page_title = '<h1>Histogram of SMS Water Data (West Bengal)</h1>'
+
+    image = histogram()
+
+    p1 = '<p class="notes">This is a histogram of all of the data. Go <a href="/">home</a>.</p>'
+
+    body = page_title + image + p1
+
+    PREFIX + (HEAD % html_title) + (BODY % body) + SUFFIX
+  end
 end
 
 ##########
@@ -77,38 +165,36 @@ end
 ##########
 
 get '/' do
-  html_title = 'Overview'
+  puts(params[:operation])
+  query_vars = process_params(params)
   
-  page_title = '<h1>Lumin Reports (West Bengal SMS Data)</h1>'
-  p1 = counts()
-  p2 = "<p class=\"notes\">For example, see this <a href=\"/histogram\">histogram</a>.</p>"
-  body = page_title + p1 + p2
+  #get rid of all nil values
+  query_vars.delete_if do |k,v|
+    v == nil
+  end
   
-  PREFIX + (HEAD % html_title) + (BODY % body) + SUFFIX
+  ret = ''
+  #decide whether we head to the main page or we have query parameters
+  if(query_vars.length == 1 && query_vars[:operation] == :count) #main page
+    ret = main_page()
+  else #we have some type of operation
+    #break it down by operation, then feed the operation the geo, contaminent, time 
+    case query_vars[:operation]
+    when :histogram
+      ret = histogram_page()
+    else
+      p query_vars
+      puts query_vars[:operation]
+      puts query_vars[:operation] == :histogram
+      ret = "We haven't figured out how to do that yet, but shoot us an e-mail and we'll try to get it done!"
+    end
+  end
+  ret
 end
 
-get '/histogram' do
-  html_title = 'Data histogram'
-  
-  page_title = '<h1>Histogram of SMS Water Data (West Bengal)</h1>'
-  
-  image = histogram()
-  
-  p1 = '<p class="notes">This is a histogram of all of the data. Go <a href="/">home</a>.</p>'
-
-  #counts.join(' ') + '; ' + times.join(' ')
-  #Time.now.to_i.to_s + ' <br>' + 
-  #Time.at(first_ts).to_s + ' <br>' + 
-  #Time.at(last_ts).to_s + ' <br>' +
-  body = page_title + 
-    image + p1
-  
-  PREFIX + (HEAD % html_title) + (BODY % body) + SUFFIX
-end
-
-get '/:district/histogram' do #=> district
-
-end
+#get '/:district/:block/:panchayat/:mouza/:hamlet/:well/:type/:report/:time/:operation' do ||
+#  
+#end
 
 #html_title = ''
 #page_title = ''
