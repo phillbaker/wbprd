@@ -31,6 +31,7 @@ helpers do
   def q(query)
     #sanitized_query = SQLite3::Database.quote(query)
     #puts sanitized_query
+    #puts query
     @db.get_first_value(query)
   end
   
@@ -95,11 +96,13 @@ helpers do
     "<p>There are <span class=\"special\">#{query}</span> reports to dig into!</p>"
   end
   
-  def histogram_query()
-    first_ts = Time.parse(q('select date from wb_water_sms order by date asc limit 1')).to_i
-    num_samples = q('select count(*) from wb_water_sms').to_i
+  def histogram_query(where = '')
+    where = where.empty? ? where : " where #{where} "
+    first_ts = Time.parse(q("select date from wb_water_sms #{where} order by date asc limit 1")).to_i
+    num_samples = q("select count(*) from wb_water_sms #{where} ").to_i
     #TODO static date that limits us to the data we have, future dates are not possible
-    last_ts = Time.parse(q("select date from wb_water_sms where date <= '2011-01-01' order by date desc limit 1")).to_i
+    date = " date <= '2011-01-01' "
+    last_ts = Time.parse(q("select date from wb_water_sms #{where.empty? ? " where #{date}" : where + ' and ' + date} order by date desc limit 1")).to_i
 
     #divide the total time that data has been collected into 10 buckets (alright 11 with the initial 0)
     bucket_width = (last_ts - first_ts)/10 #approximation...
@@ -111,15 +114,16 @@ helpers do
       time = first_ts + bucket_width * i
       times << time
       date = Time.at(time).strftime('%Y-%m-%d')
-      query = "select count(*) from wb_water_sms where date <= '#{date}'"
+      date_str = " date <= '#{date}' "
+      query = "select count(*) from wb_water_sms #{where.empty? ? " where #{date_str}" : where + ' and ' + date_str} "
       #the running sum is the total that we had as of each time period
       counts << q(query).to_i
     end
     [counts, times, num_samples]
   end
   
-  def histogram()
-    counts, times, num_samples = histogram_query()
+  def histogram(where)
+    counts, times, num_samples = histogram_query(where)
 
     url = "http://chart.apis.google.com/chart?" + 
       "cht=lc" + #lxy" + 
@@ -157,12 +161,12 @@ helpers do
     PREFIX + (HEAD % html_title) + (BODY % body) + SUFFIX
   end
   
-  def histogram_page()
+  def histogram_page(where)
     html_title = 'Data histogram'
 
     page_title = '<h1>Histogram of SMS Water Data (West Bengal)</h1>'
 
-    image = histogram()
+    image = histogram(where)
 
     p1 = '<p class="notes">This is a histogram of all of the data. Go <a href="/">home</a>.</p>'
 
@@ -220,7 +224,9 @@ get '/' do
       where += " type = '#{query_vars[:type]}' " if query_vars[:type]
       ret = count_page(where)
     when :histogram
-      ret = histogram_page()
+      where = ''
+      where += " type = '#{query_vars[:type]}' " if query_vars[:type]
+      ret = histogram_page(where)
     else
       ret = not_implemented_page()
     end
