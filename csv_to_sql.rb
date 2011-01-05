@@ -54,24 +54,32 @@ module LuminWestBengalSms
       headers = arr[0]
       arr = arr[1..-1] #take off the headers
     
-      #parse the date strings into ruby dates
+      
       arr.each do |o|
+        #parse the date strings into ruby dates
         d = o[0].split('/')
         o[0] = Date.civil(d.last.to_i, d[1].to_i, d.first.to_i).to_s
+        
+        o.each do |p|
+          p.chomp.downcase! if p && p.respond_to?(:downcase)
+        end
       end
       
-      #turn any empty values in all of the arrays into NULL values
+      puts "done processing"
       
       return headers, arr
     end
 
     def write_table db, columns, data
-      data.each do |o|
+      data.each_with_index do |o,i|
         begin
           write_row(db, columns, o)
+          print "." if i % 100 == 0 #status indicator
         rescue SQLite3::SQLException => e
           p o
           exit(1)
+        ensure
+          puts '' #clearing line
         end
       end
     end
@@ -87,7 +95,7 @@ module LuminWestBengalSms
           o = SQLite3::Database.quote(o) #need to escape single quotes, not c-style for sqlite, but two single quotes
           ret = "'#{o}'"
         elsif o == nil
-          ret = 'NULL'
+          ret = 'NULL' #turn any empty values in all of the arrays into NULL values
           #brk = true
         end
         ret
