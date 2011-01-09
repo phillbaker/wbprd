@@ -60,6 +60,11 @@ module LuminWestBengalSms
         d = o[0].split('/')
         o[0] = Date.civil(d.last.to_i, d[1].to_i, d.first.to_i).to_s
         
+        if(o.length != headers.length)
+          puts "not all rows are the same length: #{o.length} vs #{headers.length}; exiting."
+          exit(1)
+        end
+        
         (1..9).each do |i|
           p = o[i]
           if p && p.respond_to?(:downcase)
@@ -149,3 +154,5 @@ db = LuminWestBengalSms::create_db(sqlite_file)
 LuminWestBengalSms::setup_table(db)
 cols, data = LuminWestBengalSms::process_csv(csv_file)
 LuminWestBengalSms::write_table(db, cols, data)
+puts "inserted #{db.get_first_value("SELECT last_insert_rowid()")} rows"
+exit(0)
