@@ -148,6 +148,10 @@ helpers do
     "<img src=\"#{url}\" alt=\"A sweet google chart, that you're not seeting, unfortunately.\" title=\"Histogram\" />"
   end
 
+  def data(select, where)
+    r('select * from wb_sms_water limit 100')
+  end
+
   def main_page()
     html_title = 'Overview'
 
@@ -159,15 +163,17 @@ helpers do
     PREFIX + (HEAD % html_title) + (BODY % body) + SUFFIX
   end
 
-  def table_page()
+  def table_page(select = '', where = '')
+    res = data(select, where)
+    
     html_title = 'data'
-    table = '<table><tr>%s</tr>\n%s</table>'
-    headers = []
+    table = '<table><tr>%s</tr>%s</table>'
+    headers = res[0]
     header_html = '<th>' + headers.join('</th><th>') + '</th>'
     #header_html = headers.inject('<th>')
-    data = []
+    data = res[1..-1]
     rows = data.collect do |row|
-      '<td>' + row.join('</td><td>') + '</td>\n'
+      '<td>' + row.join('</td><td>') + '</td>'
     end
     row_html = '<tr>' + rows.join('</tr><tr>') + '</tr>'
     body = table % [header_html, row_html]
@@ -269,16 +275,32 @@ get '/' do
 end
 
 #TODO: select and :all => list stuff, especially counts
-get '/data/*/*/*/*/*/*/*' do #':district/:block/:panchayat/:mouza/:hamlet/:well' do
-  district = params[:district]
-  block = params[:block]
-  panchayat = params[:panchayat]
-  mouza = params[:mouza]
-  hamlet = params[:hamlet]
-  well = params[:well]
-  
-  r('select * from wb_sms_water limit 100').to_s
-  #table_page()
+#/data/?(.*/?){0,6}
+#/data(/.*)?
+#/data$|/data/(.*/?){1,3}
+get %r{/data$|/data/(.*/?)} do #':district/:block/:panchayat/:mouza/:hamlet/:well' do
+  ret = ''
+  unless params[:captures]
+    ret = table_page()
+  else
+    names = params[:captures].split('/')
+    geo = {
+      :district => names[0],
+      :block => names[1],
+      :panchayat => names[2],
+      :mouza => names[3],
+      :hamlet => names[4],
+      :well => names[5]
+    }
+
+    select = ''
+    where = 'where '
+
+    #r('select * from wb_sms_water limit 100').to_s
+    #
+  end
+
+  ret
 end
 
 #get '/correleation/'
