@@ -2,6 +2,7 @@
 # File: stats.rb
 # Description: simple service to serve data/graphs about the West Bengal Water SMS data set.
 # We're using get paramters because they're non-linear, and we can specify any number of the location parameters we want, or not...
+# Ignore extra get parameters and throw error on incorrect ones.
 ##########
 
 require 'rubygems'
@@ -35,6 +36,14 @@ helpers do
     @db.get_first_value(query)
   end
   
+  #rows-query
+  def r(query)#TODO , limit = 100)
+    #alreays return the headers
+    #query =~ /limit = [0-9]+$/ #make sure there's a limit
+    @db.execute2(query)
+    #return if there are more than 100 results...
+  end
+  
   #sanizite and set to known state for query params
   def process_params(opts)
     #nil should default to all for most of these, use empty strings here so we can check for allowed values easily below
@@ -60,7 +69,7 @@ helpers do
       :mouza => [nil], 
       :hamlet => [nil], 
       :well => [nil], 
-      :type => [:public, :private, nil],  #TODO #:public, :private, 
+      :type => [:public, :private, nil],
       :report => [:arsenic,:tds,:salinity,:fluoride,:iron,:tc,:fc,:ph,:hardness,nil], 
       :time => [nil], 
       :operation => [:count, :histogram]
@@ -85,24 +94,24 @@ helpers do
     ret = default
     if curr
       sym = curr.to_s.downcase.to_sym
-      #raise NotImplementedError, curr.to_s unless
       ret = sym if allowed.include?(sym) #this shouldn't fail silently...
+      #TODOraise NotDoneYet, curr.to_s unless allowed.include?(sym)
     end
     ret
   end
   
   def counts(select, where) #location = {}, type = nil, report
-    query = q('select count(*) from wb_water_sms' + (where.empty? ? where : " where #{where}"))
+    query = q('select count(*) from wb_sms_water' + (where.empty? ? where : " where #{where}"))
     "<p>There are <span class=\"special\">#{query}</span> reports to dig into!</p>"
   end
   
   def histogram_query(where)
     where = where.empty? ? where : " where #{where} "
-    first_ts = Time.parse(q("select date from wb_water_sms #{where} order by date asc limit 1")).to_i
-    num_samples = q("select count(*) from wb_water_sms #{where} ").to_i
+    first_ts = Time.parse(q("select date from wb_sms_water #{where} order by date asc limit 1")).to_i
+    num_samples = q("select count(*) from wb_sms_water #{where} ").to_i
     #TODO static date that limits us to the data we have, future dates are not possible
     date = " date <= '2011-01-01' "
-    last_ts = Time.parse(q("select date from wb_water_sms #{where.empty? ? " where #{date}" : where + ' and ' + date} order by date desc limit 1")).to_i
+    last_ts = Time.parse(q("select date from wb_sms_water #{where.empty? ? " where #{date}" : where + ' and ' + date} order by date desc limit 1")).to_i
 
     #divide the total time that data has been collected into 10 buckets (alright 11 with the initial 0)
     bucket_width = (last_ts - first_ts)/10 #approximation...
@@ -115,7 +124,7 @@ helpers do
       times << time
       date = Time.at(time).strftime('%Y-%m-%d')
       date_str = " date <= '#{date}' "
-      query = "select count(*) from wb_water_sms #{where.empty? ? " where #{date_str}" : where + ' and ' + date_str} "
+      query = "select count(*) from wb_sms_water #{where.empty? ? " where #{date_str}" : where + ' and ' + date_str} "
       #the running sum is the total that we had as of each time period
       counts << q(query).to_i
     end
@@ -150,6 +159,22 @@ helpers do
     PREFIX + (HEAD % html_title) + (BODY % body) + SUFFIX
   end
 
+  def table_page()
+    html_title = 'data'
+    table = '<table><tr>%s</tr>\n%s</table>'
+    headers = []
+    header_html = '<th>' + headers.join('</th><th>') + '</th>'
+    #header_html = headers.inject('<th>')
+    data = []
+    rows = data.collect do |row|
+      '<td>' + row.join('</td><td>') + '</td>\n'
+    end
+    row_html = '<tr>' + rows.join('</tr><tr>') + '</tr>'
+    body = table % [header_html, row_html]
+    
+    PREFIX + (HEAD % html_title) + (BODY % body) + SUFFIX
+  end
+
   def count_page(select = '', where = '')
     html_title = 'Counts'
 
@@ -176,10 +201,10 @@ helpers do
   end
   
   def not_found_page()
-    PREFIX + (HEAD % 'Not found') + (BODY % "We couldn't find what your'e looking for, shoot us an e-mail and we'll see what we can do.") + SUFFIX
+    PREFIX + (HEAD % 'Not found') + (BODY % "We couldn't find what you're looking for, shoot us an e-mail and we'll see what we can do.") + SUFFIX
   end
   
-  def not_implemented_page(error)
+  def not_implemented_page(error = 'that')
     PREFIX + (HEAD % 'Not found') + (BODY % "We haven't figured out how to do #{error} yet, but shoot us an e-mail and we'll try to get it done!") + SUFFIX
   end
   
@@ -189,6 +214,12 @@ helpers do
     where.join(' and ')
   end
 end
+
+##########
+# Exceptions
+##########
+
+#class NotDoneYet < Exception; end
 
 ##########
 # Filters
@@ -202,15 +233,16 @@ not_found do
   not_found_page()
 end 
 
-error NotImplementedError do
-  not_implemented_page(request.env['sinatra.error'].message)
-end
+#error do
+#  #TODOpass unless env['sinatra.error'].is_a? NotDoneYet
+#  not_implemented_page(request.env['sinatra.error'].message) 
+#end
 
 ##########
 # Routes
 ##########
 
-get '/' do
+get '/' do 
   query_vars = process_params(params)
   
   #get rid of all nil values
@@ -236,9 +268,26 @@ get '/' do
   ret
 end
 
-#get '/:district/:block/:panchayat/:mouza/:hamlet/:well/:type/:report/:time/:operation' do ||
-#  
-#end
+#TODO: select and :all => list stuff, especially counts
+get '/data/*/*/*/*/*/*/*' do #':district/:block/:panchayat/:mouza/:hamlet/:well' do
+  district = params[:district]
+  block = params[:block]
+  panchayat = params[:panchayat]
+  mouza = params[:mouza]
+  hamlet = params[:hamlet]
+  well = params[:well]
+  
+  r('select * from wb_sms_water limit 100').to_s
+  #table_page()
+end
+
+#get '/correleation/'
+#...
+
+
+
+#get 'data/:district/:block/:panchayat/:mouza/:hamlet/:well/:type/:report/:time/:operation' do ||
+#do /:district/:block/:panchayat/:mouza/:hamlet/:well?:type&:report&:time&:operation
 
 #html_title = ''
 #page_title = ''
