@@ -21,7 +21,7 @@ module LuminWestBengalSms
     end
 
     def table_name
-      'wb_water_sms'
+      'wb_sms_water'
     end
 
     def table_defn
