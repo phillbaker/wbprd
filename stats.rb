@@ -100,9 +100,13 @@ helpers do
     ret
   end
   
+  def count(select, where) #location = {}, type = nil, report
+    q('select count(*) from wb_sms_water' + (where.empty? ? where : " where #{where}")).to_i
+  end
+  
+  #the html wrapped count()
   def counts(select, where) #location = {}, type = nil, report
-    query = q('select count(*) from wb_sms_water' + (where.empty? ? where : " where #{where}"))
-    "<p>There are <span class=\"special\">#{query}</span> reports to dig into!</p>"
+    "<p>There are <span class=\"special\">#{count(select, where).to_s}</span> reports to dig into!</p>"
   end
   
   def histogram_query(where)
@@ -149,7 +153,9 @@ helpers do
   end
 
   def data(select, where)
-    r('select * from wb_sms_water limit 100')
+    select_sql = select.empty? ? ' * ' : select
+    where_sql = where.empty? ? where : " where #{where}"
+    [r("select #{select_sql} from wb_sms_water #{where_sql} limit 100"), count('', where) >= 100] #return the query and whether there are more results
   end
 
   def main_page()
@@ -164,9 +170,11 @@ helpers do
   end
 
   def table_page(select = '', where = '')
-    res = data(select, where)
+    res,more = data(select, where)
     
     html_title = 'data'
+    
+    page_title = '<h1>Data dump!</h1>' + (more ? '<h2>(there\'s more than this...)</h2>' : '')
     table = '<table><tr>%s</tr>%s</table>'
     headers = res[0]
     header_html = '<th>' + headers.join('</th><th>') + '</th>'
@@ -176,7 +184,7 @@ helpers do
       '<td>' + row.join('</td><td>') + '</td>'
     end
     row_html = '<tr>' + rows.join('</tr><tr>') + '</tr>'
-    body = table % [header_html, row_html]
+    body = page_title + table % [header_html, row_html]
     
     PREFIX + (HEAD % html_title) + (BODY % body) + SUFFIX
   end
@@ -217,6 +225,7 @@ helpers do
   def form_where(vars)
     where = []
     where << " type = '#{vars[:type]}' " if vars[:type]
+    #others
     where.join(' and ')
   end
 end
@@ -261,7 +270,7 @@ get '/' do
   if(query_vars.length == 1 && query_vars[:operation] == :count) #main page
     ret = main_page()
   else #we have some type of operation
-    #break it down by operation, then feed the operation the geo, contaminent, time 
+    #break it down by operation, then feed the operation the contaminent, time 
     case query_vars[:operation]
     when :count
       ret = count_page('', form_where(query_vars))
@@ -280,10 +289,11 @@ end
 #/data$|/data/(.*/?){1,3}
 get %r{/data$|/data/(.*/?)} do #':district/:block/:panchayat/:mouza/:hamlet/:well' do
   ret = ''
-  unless params[:captures]
+
+  if params[:captures] == nil || params[:captures].first.empty?
     ret = table_page()
   else
-    names = params[:captures].split('/')
+    names = params[:captures].first.split('/')
     geo = {
       :district => names[0],
       :block => names[1],
@@ -293,11 +303,15 @@ get %r{/data$|/data/(.*/?)} do #':district/:block/:panchayat/:mouza/:hamlet/:wel
       :well => names[5]
     }
 
-    select = ''
-    where = 'where '
+    #get rid of all nil values
+    geo.delete_if do |k,v|
+      v == nil
+    end
 
-    #r('select * from wb_sms_water limit 100').to_s
-    #
+    select = geo.collect{|k,v| "#{k.to_s}"}.join(', ' )
+    where = geo.collect{|k,v| "#{k.to_s} = #{v.to_s}"}.join(' and ' )
+
+    table_page(select, where)
   end
 
   ret
