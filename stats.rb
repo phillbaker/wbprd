@@ -384,8 +384,7 @@ get %r{/summary$|/summary/(.*/?)} do
       v == nil
     end
     
-    #TODO on the grouping, by 
-    select = query_vars.empty? ? '' : (['date'] + geo.collect{|k,v| "#{k.to_s}"} + [query_vars[:report]]).compact.join(', ' ) #always report date
+    select = (geo.collect{|k,v| "#{k.to_s}"}).compact.join(', ' )#TODO this will report incorrect errors on the ['date'] + + [query_vars[:report]] #always report date
     where = geo.collect{|k,v| "#{k.to_s} = '#{v.to_s}'"}.join(' and ' )
     group = hierarchy[0..geo.length].collect{|k,v| "#{k.to_s}"}.join(', ' ) #do one more than the current level
     #puts "#{select} #{where} #{group}"
@@ -400,7 +399,18 @@ get '/dups' do
 
   page_title = '<h1>Duplicates in SMS Water Data (West Bengal)</h2>'
   p1 = "<p>There are currently #{q("select count(*) from (select date,district,block,panchayat,mouza,type,source,hamlet,lab,code,arsenic,tds,salinity,fluoride,iron,tc,fc,ph,hardness,count(*) as count from wb_sms_water group by date,district,block,panchayat,mouza,type,source,hamlet,lab,code,arsenic,tds,salinity,fluoride,iron,tc,fc,ph,hardness having count > 1)").to_i} duplicate entries in the dataset.</p>"
-  p2 = "<p class=\"notes\">For example, see this <a href=\"/?operation=histogram\">histogram</a>.</p>"
+  p2 = "<p class=\"notes\">If there's more than one, that should be fixed!</p>"
+  body = page_title + p1 + p2
+
+  PREFIX + (HEAD % html_title) + (BODY % body) + SUFFIX
+end
+
+get '/repeats' do
+  html_title = 'Repeated test sites'
+
+  page_title = '<h1>Duplicates in SMS Water Data (West Bengal)</h2>'
+  p1 = "<p>There are currently #{q("select count(*) from (select district,block,panchayat,mouza,hamlet,code,date,count(*) as count from wb_sms_water group by district,block,panchayat,mouza,hamlet,code,date) where count > 1").to_i} repeated sites in the dataset.</p>"
+  p2 = "<p class=\"notes\">For an example, dig into the <a href=\"/data\">data</a>.</p>"
   body = page_title + p1 + p2
 
   PREFIX + (HEAD % html_title) + (BODY % body) + SUFFIX
