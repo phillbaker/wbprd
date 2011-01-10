@@ -61,6 +61,7 @@ module LuminWestBengalSms
         o[0] = Date.civil(d.last.to_i, d[1].to_i, d.first.to_i).to_s
         
         if(o.length != headers.length)
+          p o
           puts "not all rows are the same length: #{o.length} vs #{headers.length}; exiting."
           exit(1)
         end
