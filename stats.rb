@@ -3,6 +3,7 @@
 # Description: simple service to serve data/graphs about the West Bengal Water SMS data set.
 # We're using get paramters because they're non-linear, and we can specify any number of the location parameters we want, or not...
 # Ignore extra get parameters and throw error on incorrect ones.
+# What I really want is a URL-based DSL for information...
 ##########
 
 require 'rubygems'
@@ -308,10 +309,11 @@ get %r{/data$|/data/(.*/?)} do #':district/:block/:panchayat/:mouza/:hamlet/:wel
       v == nil
     end
 
-    select = geo.collect{|k,v| "#{k.to_s}"}.join(', ' )
-    where = geo.collect{|k,v| "#{k.to_s} = #{v.to_s}"}.join(' and ' )
+    select = ''#geo.collect{|k,v| "#{k.to_s}"}.join(', ' )
+    where = '' #geo.collect{|k,v| "#{k.to_s} = #{v.to_s}"}.join(' and ' )
+    group = geo.collect{|k,v| "#{k.to_s}"}.join(', ' )
 
-    table_page(select, where)
+    table_page(select, where, group)
   end
 
   ret
