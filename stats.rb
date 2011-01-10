@@ -107,13 +107,13 @@ helpers do
     ret
   end
   
-  def count(select, where) #location = {}, type = nil, report
-    q('select count(*) from wb_sms_water' + (where.empty? ? where : " where #{where}")).to_i
+  def count(select, where, group) #location = {}, type = nil, report
+    q('select count(*) from wb_sms_water ' + (where.empty? ? where : " where #{where}") + (group.empty? ? group : " group by #{group} ")).to_i
   end
   
   #the html wrapped count()
-  def counts(select, where) #location = {}, type = nil, report
-    "<p>There are <span class=\"special\">#{count(select, where).to_s}</span> reports to dig into!</p>"
+  def counts(select, where, group) #location = {}, type = nil, report
+    "<p>There are <span class=\"special\">#{count(select, where, group).to_s}</span> reports to dig into!</p>"
   end
   
   def histogram_query(where)
@@ -165,14 +165,14 @@ helpers do
     where_sql = where.empty? ? where : " where #{where} "
     group_sql = group.empty? ? group : " group by #{group} "
     #{}"select #{select_sql} from wb_sms_water #{where_sql} #{group_sql} limit 100"
-    [r("select #{select_sql} from wb_sms_water #{where_sql} #{group_sql} limit 100"), count('', where) >= 100] #return the query and whether there are more results
+    [r("select #{select_sql} from wb_sms_water #{where_sql} #{group_sql} limit 100"), count('', where, group) >= 100] #return the query and whether there are more results
   end
 
   def main_page()
     html_title = 'Overview'
 
     page_title = '<h1>Lumin Reports</h1><h2>(West Bengal SMS Data)</h2>'
-    p1 = counts('', '')
+    p1 = counts('', '', '')
     p2 = "<p class=\"notes\">For example, see this <a href=\"/?operation=histogram\">histogram</a>.</p>"
     body = page_title + p1 + p2
 
@@ -212,6 +212,8 @@ helpers do
     #header_html = headers.inject('<th>')
     data = res[1..-1]
     rows = data.collect do |row|
+      #TODO only want base urls for high-heirarchy levels...
+      #TODO don't want links on the lowest level of the hierarhcy levels
       '<td>' + (0..row.length).collect{|i| link[i] ? "<a href=\"#{request.path + "/#{row[i]}"}\">#{row[i]}</a>" : row[i]  }.join('</td><td>') + '</td>' #TODO make the districts/etc. links to look at further parts of the hierarchy
     end
     row_html = '<tr>' + rows.join('</tr><tr>') + '</tr>'
@@ -220,11 +222,11 @@ helpers do
     PREFIX + (HEAD % html_title) + (BODY % body) + SUFFIX
   end
   
-  def count_page(select = '', where = '')
+  def count_page(select = '', where = '', group = '')
     html_title = 'Counts'
 
     page_title = '<h1>Counts of SMS Water Data (West Bengal)</h2>'
-    p1 = counts(select, where)
+    p1 = counts(select, where, group)
     p2 = "<p class=\"notes\">For example, see this <a href=\"/?operation=histogram\">histogram</a>.</p>"
     body = page_title + p1 + p2
 
@@ -384,7 +386,7 @@ get %r{/summary$|/summary/(.*/?)} do
       v == nil
     end
     
-    select = (geo.collect{|k,v| "#{k.to_s}"}).compact.join(', ' )#TODO this will report incorrect errors on the ['date'] + + [query_vars[:report]] #always report date
+    select = (hierarchy[0..geo.length].collect{|k,v| "#{k.to_s}"} + ['count(*) as reports']).compact.join(', ' )#TODO this will report incorrect results, basically randomly picking stuff from the group on the ['date'] + + ["#{query_vars[:operation]}(#{query_vars[:report]})"]
     where = geo.collect{|k,v| "#{k.to_s} = '#{v.to_s}'"}.join(' and ' )
     group = hierarchy[0..geo.length].collect{|k,v| "#{k.to_s}"}.join(', ' ) #do one more than the current level
     #puts "#{select} #{where} #{group}"
