@@ -164,7 +164,8 @@ helpers do
     select_sql = select.empty? ? ' * ' : select
     where_sql = where.empty? ? where : " where #{where} "
     group_sql = group.empty? ? group : " group by #{group} "
-    [r("select #{select_sql} from wb_sms_water #{where_sql} limit 100"), count('', where) >= 100] #return the query and whether there are more results
+    #{}"select #{select_sql} from wb_sms_water #{where_sql} #{group_sql} limit 100"
+    [r("select #{select_sql} from wb_sms_water #{where_sql} #{group_sql} limit 100"), count('', where) >= 100] #return the query and whether there are more results
   end
 
   def main_page()
@@ -197,7 +198,28 @@ helpers do
     
     PREFIX + (HEAD % html_title) + (BODY % body) + SUFFIX
   end
-
+  
+  def table_links_page(select = '', where = '', group = '')
+    res,more = data(select, where, group)
+    
+    html_title = 'data'
+    #request.path
+    page_title = '<h1>Data dump!</h1>' + (more ? '<h2>(there\'s more than this...)</h2>' : '')
+    table = '<table><tr>%s</tr>%s</table>'
+    headers = res[0]
+    link = headers.collect{|o| group.include?(o) }
+    header_html = '<th>' + headers.join('</th><th>') + '</th>' #TODO put in explanations of what these are/units
+    #header_html = headers.inject('<th>')
+    data = res[1..-1]
+    rows = data.collect do |row|
+      '<td>' + (0..row.length).collect{|i| link[i] ? "<a href=\"#{request.path + "/#{row[i]}"}\">#{row[i]}</a>" : row[i]  }.join('</td><td>') + '</td>' #TODO make the districts/etc. links to look at further parts of the hierarchy
+    end
+    row_html = '<tr>' + rows.join('</tr><tr>') + '</tr>'
+    body = page_title + table % [header_html, row_html]
+    
+    PREFIX + (HEAD % html_title) + (BODY % body) + SUFFIX
+  end
+  
   def count_page(select = '', where = '')
     html_title = 'Counts'
 
@@ -335,12 +357,11 @@ end
 
 get %r{/summary$|/summary/(.*/?)} do
   ret = ''
-
+  
   if params[:captures] == nil || params[:captures].first.empty?
-    ret = table_page()
+    ret = table_links_page('district,count(*) as reports', '', 'district')
   else
-    url = params[:captures].first
-    names = url.split('/')
+    names = params[:captures].first.split('/')
     geo = {
       :district => names[0],
       :block => names[1],
@@ -354,17 +375,21 @@ get %r{/summary$|/summary/(.*/?)} do
       v == nil
     end
     
+    #decide what level we're at and then display the groups of the next level
+    hierarchy = [:district, :block, :panchayat, :mouza, :hamlet, :code]
+    
     query_vars = process_params(params.reject{|k,v| k.to_sym == :captures })
     #get rid of all nil values
     query_vars.delete_if do |k,v|
       v == nil
     end
-
+    
+    #TODO on the grouping, by 
     select = query_vars.empty? ? '' : (['date'] + geo.collect{|k,v| "#{k.to_s}"} + [query_vars[:report]]).compact.join(', ' ) #always report date
     where = geo.collect{|k,v| "#{k.to_s} = '#{v.to_s}'"}.join(' and ' )
-    group = '' #geo.collect{|k,v| "#{k.to_s}"}.join(', ' )
+    group = hierarchy[0..geo.length].collect{|k,v| "#{k.to_s}"}.join(', ' ) #do one more than the current level
     #puts "#{select} #{where} #{group}"
-    ret = table_page(select, where, group)
+    ret = table_links_page(select, where, group)
   end
 
   ret
