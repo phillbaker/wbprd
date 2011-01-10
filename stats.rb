@@ -148,14 +148,16 @@ helpers do
       "&chtt=" + "Reports over time".gsub(/\ /, '+') +
       "&chxr=1,0," + num_samples.to_s +
       "&chds=0," + num_samples.to_s +
-      "&chxl=0:|#{Time.at(times.first).strftime("%b %d %Y %H:%M")}|#{Time.at(times[5]).strftime("%b %d %Y")}|#{Time.at(times.last).strftime("%b %d %Y %H:%M")}" #"&chxl=0:|0|1|2|3|4|5|6|7|8|9|10"
+      "&chxs=0,676767,15|1,676767,14" +
+      "&chxl=0:|#{Time.at(times.first).strftime("%b %d %Y")}|#{Time.at(times[5]).strftime("%b %d %Y")}|#{Time.at(times.last).strftime("%b %d %Y")}" #"&chxl=0:|0|1|2|3|4|5|6|7|8|9|10" # %H:%M
     
     "<img src=\"#{url}\" alt=\"A sweet google chart, that you're not seeting, unfortunately.\" title=\"Histogram\" />"
   end
 
-  def data(select, where)
+  def data(select, where, group)
     select_sql = select.empty? ? ' * ' : select
-    where_sql = where.empty? ? where : " where #{where}"
+    where_sql = where.empty? ? where : " where #{where} "
+    group_sql = group.empty? ? group : " group by #{group} "
     [r("select #{select_sql} from wb_sms_water #{where_sql} limit 100"), count('', where) >= 100] #return the query and whether there are more results
   end
 
@@ -170,8 +172,8 @@ helpers do
     PREFIX + (HEAD % html_title) + (BODY % body) + SUFFIX
   end
 
-  def table_page(select = '', where = '')
-    res,more = data(select, where)
+  def table_page(select = '', where = '', group = '')
+    res,more = data(select, where, group)
     
     html_title = 'data'
     
@@ -309,20 +311,20 @@ get %r{/data$|/data/(.*/?)} do #':district/:block/:panchayat/:mouza/:hamlet/:wel
       v == nil
     end
 
-    select = ''#geo.collect{|k,v| "#{k.to_s}"}.join(', ' )
-    where = '' #geo.collect{|k,v| "#{k.to_s} = #{v.to_s}"}.join(' and ' )
-    group = geo.collect{|k,v| "#{k.to_s}"}.join(', ' )
-
-    table_page(select, where, group)
+    select = '' #geo.collect{|k,v| "#{k.to_s}"}.join(', ' )
+    where = geo.collect{|k,v| "#{k.to_s} = '#{v.to_s}'"}.join(' and ' )
+    group = '' #geo.collect{|k,v| "#{k.to_s}"}.join(', ' )
+    #puts "#{select} #{where} #{group}"
+    ret = table_page(select, where, group)
   end
 
   ret
 end
 
+get '/summary'
+
 #get '/correleation/'
 #...
-
-
 
 #get 'data/:district/:block/:panchayat/:mouza/:hamlet/:well/:type/:report/:time/:operation' do ||
 #do /:district/:block/:panchayat/:mouza/:hamlet/:well?:type&:report&:time&:operation
