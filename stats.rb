@@ -310,7 +310,7 @@ get %r{/data$|/data/(.*/?)} do #':district/:block/:panchayat/:mouza/:hamlet/:wel
       :panchayat => names[2],
       :mouza => names[3],
       :hamlet => names[4],
-      :well => names[5]
+      :code => names[5] #ie well
     }
     #get rid of all nil values
     geo.delete_if do |k,v|
@@ -323,7 +323,7 @@ get %r{/data$|/data/(.*/?)} do #':district/:block/:panchayat/:mouza/:hamlet/:wel
       v == nil
     end
 
-    select = query_vars.empty? ? '' : (geo.collect{|k,v| "#{k.to_s}"} + [query_vars[:report]]).compact.join(', ' )
+    select = query_vars.empty? ? '' : (['date'] + geo.collect{|k,v| "#{k.to_s}"} + [query_vars[:report]]).compact.join(', ' ) #always report date
     where = geo.collect{|k,v| "#{k.to_s} = '#{v.to_s}'"}.join(' and ' )
     group = '' #geo.collect{|k,v| "#{k.to_s}"}.join(', ' )
     #puts "#{select} #{where} #{group}"
@@ -333,9 +333,53 @@ get %r{/data$|/data/(.*/?)} do #':district/:block/:panchayat/:mouza/:hamlet/:wel
   ret
 end
 
-#get %r{/summary$|/summary/(.*/?)} do
-#  
-#end
+get %r{/summary$|/summary/(.*/?)} do
+  ret = ''
+
+  if params[:captures] == nil || params[:captures].first.empty?
+    ret = table_page()
+  else
+    url = params[:captures].first
+    names = url.split('/')
+    geo = {
+      :district => names[0],
+      :block => names[1],
+      :panchayat => names[2],
+      :mouza => names[3],
+      :hamlet => names[4],
+      :code => names[5] #ie well
+    }
+    #get rid of all nil values
+    geo.delete_if do |k,v|
+      v == nil
+    end
+    
+    query_vars = process_params(params.reject{|k,v| k.to_sym == :captures })
+    #get rid of all nil values
+    query_vars.delete_if do |k,v|
+      v == nil
+    end
+
+    select = query_vars.empty? ? '' : (['date'] + geo.collect{|k,v| "#{k.to_s}"} + [query_vars[:report]]).compact.join(', ' ) #always report date
+    where = geo.collect{|k,v| "#{k.to_s} = '#{v.to_s}'"}.join(' and ' )
+    group = '' #geo.collect{|k,v| "#{k.to_s}"}.join(', ' )
+    #puts "#{select} #{where} #{group}"
+    ret = table_page(select, where, group)
+  end
+
+  ret
+end
+
+get '/dups' do
+  html_title = 'Duplicates'
+
+  page_title = '<h1>Duplicates in SMS Water Data (West Bengal)</h2>'
+  p1 = "<p>There are currently #{q("select count(*) from (select date,district,block,panchayat,mouza,type,source,hamlet,lab,code,arsenic,tds,salinity,fluoride,iron,tc,fc,ph,hardness,count(*) as count from wb_sms_water group by date,district,block,panchayat,mouza,type,source,hamlet,lab,code,arsenic,tds,salinity,fluoride,iron,tc,fc,ph,hardness having count > 1)").to_i} duplicate entries in the dataset.</p>"
+  p2 = "<p class=\"notes\">For example, see this <a href=\"/?operation=histogram\">histogram</a>.</p>"
+  body = page_title + p1 + p2
+
+  PREFIX + (HEAD % html_title) + (BODY % body) + SUFFIX
+end
 
 #get '/correleation/'
 #...
