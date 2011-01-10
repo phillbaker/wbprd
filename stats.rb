@@ -26,6 +26,12 @@ BODY = '<body>%s</body>'
 SUFFIX = '</html>'
 
 ##########
+# Sinatra settings
+##########
+
+set :dump_errors, false
+
+##########
 # Helpers
 ##########
 helpers do
@@ -58,7 +64,7 @@ helpers do
       :type => nil, #public/private/both
       :report => nil, #what contaminant to report on, nil is simply a record in the db (ie all)
       :time => nil, #defaults to all records in existence
-      :operation => :count #reports, histogram, cot (change over time), coverage; defaults to counts of records
+      :operation => nil #:count, reports, histogram, cot (change over time), coverage; defaults to counts of records
       #TODO if we're really just serving data, we should probably put a max number of records...
       #also be ready for a format
     }
@@ -180,11 +186,11 @@ helpers do
     page_title = '<h1>Data dump!</h1>' + (more ? '<h2>(there\'s more than this...)</h2>' : '')
     table = '<table><tr>%s</tr>%s</table>'
     headers = res[0]
-    header_html = '<th>' + headers.join('</th><th>') + '</th>'
+    header_html = '<th>' + headers.join('</th><th>') + '</th>' #TODO put in explanations of what these are/units
     #header_html = headers.inject('<th>')
     data = res[1..-1]
     rows = data.collect do |row|
-      '<td>' + row.join('</td><td>') + '</td>'
+      '<td>' + row.join('</td><td>') + '</td>' #TODO make the districts/etc. links to look at further parts of the hierarchy
     end
     row_html = '<tr>' + rows.join('</tr><tr>') + '</tr>'
     body = page_title + table % [header_html, row_html]
@@ -270,7 +276,7 @@ get '/' do
   
   ret = ''
   #decide whether we head to the main page or we have query parameters
-  if(query_vars.length == 1 && query_vars[:operation] == :count) #main page
+  if(query_vars.length == 0) #main page
     ret = main_page()
   else #we have some type of operation
     #break it down by operation, then feed the operation the contaminent, time 
@@ -296,7 +302,8 @@ get %r{/data$|/data/(.*/?)} do #':district/:block/:panchayat/:mouza/:hamlet/:wel
   if params[:captures] == nil || params[:captures].first.empty?
     ret = table_page()
   else
-    names = params[:captures].first.split('/')
+    url = params[:captures].first
+    names = url.split('/')
     geo = {
       :district => names[0],
       :block => names[1],
@@ -305,13 +312,18 @@ get %r{/data$|/data/(.*/?)} do #':district/:block/:panchayat/:mouza/:hamlet/:wel
       :hamlet => names[4],
       :well => names[5]
     }
-
     #get rid of all nil values
     geo.delete_if do |k,v|
       v == nil
     end
+    
+    query_vars = process_params(params.reject{|k,v| k.to_sym == :captures })
+    #get rid of all nil values
+    query_vars.delete_if do |k,v|
+      v == nil
+    end
 
-    select = '' #geo.collect{|k,v| "#{k.to_s}"}.join(', ' )
+    select = query_vars.empty? ? '' : (geo.collect{|k,v| "#{k.to_s}"} + [query_vars[:report]]).compact.join(', ' )
     where = geo.collect{|k,v| "#{k.to_s} = '#{v.to_s}'"}.join(' and ' )
     group = '' #geo.collect{|k,v| "#{k.to_s}"}.join(', ' )
     #puts "#{select} #{where} #{group}"
@@ -321,7 +333,9 @@ get %r{/data$|/data/(.*/?)} do #':district/:block/:panchayat/:mouza/:hamlet/:wel
   ret
 end
 
-get '/summary'
+#get %r{/summary$|/summary/(.*/?)} do
+#  
+#end
 
 #get '/correleation/'
 #...
