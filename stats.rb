@@ -4,6 +4,9 @@
 # We're using get paramters because they're non-linear, and we can specify any number of the location parameters we want, or not...
 # Ignore extra get parameters and throw error on incorrect ones.
 # What I really want is a URL-based DSL for information...
+#
+#TODO I'd like to automatically make a url-map or something that shows to which urls this code responds
+#TODO use https://github.com/mattetti/googlecharts
 ##########
 
 require 'rubygems'
@@ -44,7 +47,7 @@ helpers do
   end
   
   #rows-query
-  def r(query)#TODO , limit = 100)
+  def r(query)#TODO , limit = 100, offset = 0)
     #alreays return the headers
     #query =~ /limit = [0-9]+$/ #make sure there's a limit
     @db.execute2(query)
@@ -54,13 +57,7 @@ helpers do
   #sanizite and set to known state for query params
   def process_params(opts)
     #nil should default to all for most of these, use empty strings here so we can check for allowed values easily below
-    defaults = {
-      :district => nil, #the below are all geo locations
-      :block => nil,
-      :panchayat => nil,
-      :mouza => nil,
-      :hamlet => nil,
-      :well => nil, #end of geo locations
+    defaults = { #really, they're all nil
       :type => nil, #public/private/both
       :report => nil, #what contaminant to report on, nil is simply a record in the db (ie all)
       :time => nil, #defaults to all records in existence
@@ -70,18 +67,13 @@ helpers do
     }
     
     allowed_options = { # TODO the good way to do this would be to see if we respond_to?(:operation) or it's in the table
-      :district => [nil], 
-      :block => [nil], 
-      :panchayat => [nil], 
-      :mouza => [nil], 
-      :hamlet => [nil], 
-      :well => [nil], 
       :type => [:public, :private, nil],
       :report => [:arsenic,:tds,:salinity,:fluoride,:iron,:tc,:fc,:ph,:hardness,nil], #:all, :date?
       :time => [nil], 
-      :operation => [:count, :histogram] #max, min, avg, count_greater_than
+      :operation => [:count, :avg, :max, :min, :histogram],
+      :gt => [Float]
     }
-    #need to convert string values of keys to symbols
+    #convert string values of keys to symbols and then load it into defaults
     ret = defaults.merge(opts.inject({}){|hsh,(k,v)| hsh[k.to_sym] = v; hsh}) 
     #TODO the below is poorly executed, there's gotta be a better way to do this
     #TODO check all the geo data to make sure it exists/it's sanitary
@@ -164,7 +156,7 @@ helpers do
     select_sql = select.empty? ? ' * ' : select
     where_sql = where.empty? ? where : " where #{where} "
     group_sql = group.empty? ? group : " group by #{group} "
-    p "select #{select_sql} from wb_sms_water #{where_sql} #{group_sql} limit 100"
+    #p "select #{select_sql} from wb_sms_water #{where_sql} #{group_sql} limit 100"
     [r("select #{select_sql} from wb_sms_water #{where_sql} #{group_sql} limit 100"), count('', where, group) >= 100] #return the query and whether there are more results
   end
 
@@ -191,7 +183,7 @@ helpers do
     #header_html = headers.inject('<th>')
     data = res[1..-1]
     rows = data.collect do |row|
-      '<td>' + row.join('</td><td>') + '</td>' #TODO make the districts/etc. links to look at further parts of the hierarchy
+      '<td>' + row.join('</td><td>') + '</td>'
     end
     row_html = '<tr>' + rows.join('</tr><tr>') + '</tr>'
     body = page_title + table % [header_html, row_html]
@@ -215,15 +207,16 @@ helpers do
       link = headers.collect{|o| hierarchy.include?(o.to_sym) && (current_level + hierarchy.index(o.to_sym)) < hierarchy.length * 2 - 1 } #everything but the last one
       path = request.path.split('/')
       rows = res[1..-1].collect do |row|
-        #TODO only want base urls for high-heirarchy levels...
+        #only want base urls for high-heirarchy levels
         #don't want links on the lowest level of the hierarhcy levels
-        '<td>' + (0..row.length).collect{|i| link[i] ? "<a href=\"#{path[0..hierarchy.index(headers[i].to_sym)+1].join('/') + "/#{row[i]}"}\">#{row[i]}</a>" : row[i]  }.join('</td><td>') + "</td>\n" #TODO make the districts/etc. links to look at further parts of the hierarchy
+        #TODO pass the query params of the url onto the next one
+        '<td>' + (0..row.length).collect{|i| link[i] ? "<a href=\"#{path[0..hierarchy.index(headers[i].to_sym)+1].join('/') + "/#{row[i]}"}\">#{row[i]}</a>" : row[i]  }.join('</td><td>') + "</td>\n"
       end
       row_html = '<tr>' + rows.join('</tr><tr>') + '</tr>'
       
       body = page_title + "<p class=\"headnote\"><a href=\"#{path[0..1].join('/')}\">Top summary level</a></p>\n" + table % [header_html, row_html]
     else
-      body = '<p>Couldn\'t find anything with that designation.</p>'
+      body = '<p>Couldn\'t find anything with that designation.</p>' #TODO or do 404?
     end
     
     PREFIX + (HEAD % html_title) + (BODY % body) + SUFFIX
@@ -323,7 +316,6 @@ get '/' do
   ret
 end
 
-#TODO: select and :all => list stuff, especially counts
 #/data/?(.*/?){0,6}
 #/data(/.*)?
 #/data$|/data/(.*/?){1,3}
@@ -387,7 +379,7 @@ get %r{/summary(/|(/[^ /]*){0,7})/?$} do #do up to level of hierarchy
     ret = table_links_page(hierarchy, 0, 'district,count(*) as reports', '', 'district')
   else
     names = params[:captures].first.split('/').slice(1..-1) || []#ignore the first one - it's empty
-    geo = {
+    geo = {#TODO do :all in a level to instead of grouping, display everything below
       :district => names[0],
       :block => names[1],
       :panchayat => names[2],
@@ -401,9 +393,9 @@ get %r{/summary(/|(/[^ /]*){0,7})/?$} do #do up to level of hierarchy
       v == nil
     end
     
-    p query_vars
+    #p query_vars
     summary = query_vars[:report] ? ["#{query_vars[:operation] || 'count'}(#{query_vars[:report]})"] : ['count(*) as reports']
-    select = geo.length == hierarchy.length && !query_vars[:report]? '' : (hierarchy[0..geo.length].collect{|k,v| "#{k.to_s}"} + summary).compact.join(', ' )#TODO this will report incorrect results, basically randomly picking stuff from the group on the ['date'] + + ["#{query_vars[:operation]}(#{query_vars[:report]})"]
+    select = geo.length == hierarchy.length && !query_vars[:report]? '' : (hierarchy[0..geo.length].collect{|k,v| "#{k.to_s}"} + summary).compact.join(', ' )
     where = geo.collect{|k,v| "#{k.to_s} = '#{v.to_s}'"}.join(' and ' )
     #decide what level we're at and then display the groups of the next level
     group = hierarchy[0..geo.length].collect{|k,v| "#{k.to_s}"}.join(', ' ) #do one more than the current level
@@ -412,6 +404,10 @@ get %r{/summary(/|(/[^ /]*){0,7})/?$} do #do up to level of hierarchy
   end
 
   ret
+end
+
+get '/id/:id' do
+  table_page('', "id = #{params[:id]}")
 end
 
 get '/dups' do
