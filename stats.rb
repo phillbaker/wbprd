@@ -77,9 +77,9 @@ helpers do
       :hamlet => [nil], 
       :well => [nil], 
       :type => [:public, :private, nil],
-      :report => [:arsenic,:tds,:salinity,:fluoride,:iron,:tc,:fc,:ph,:hardness,nil], 
+      :report => [:arsenic,:tds,:salinity,:fluoride,:iron,:tc,:fc,:ph,:hardness,nil], #:all, :date?
       :time => [nil], 
-      :operation => [:count, :histogram]
+      :operation => [:count, :histogram] #max, min, avg, count_greater_than
     }
     #need to convert string values of keys to symbols
     ret = defaults.merge(opts.inject({}){|hsh,(k,v)| hsh[k.to_sym] = v; hsh}) 
@@ -200,25 +200,27 @@ helpers do
   end
   
   #this makes some assumptions about the order of the items in select/where/group
-  def table_links_page(select = '', where = '', group = '')
+  def table_links_page(hierarchy, select = '', where = '', group = '')
     res,more = data(select, where, group)
-    
+
     html_title = 'data'
     #request.path
     page_title = '<h1>Well Finder</h1>' + (more ? '<h2>(there\'s more than this...)</h2>' : '')
     if(res.length > 1)
       table = '<table><tr>%s</tr>%s</table>'
       headers = res[0]
-      link = headers.collect{|o| group.include?(o) }
       header_html = '<th>' + headers.join('</th><th>') + '</th>' #TODO put in explanations of what these are/units
       #header_html = headers.inject('<th>')
-      data = res[1..-1]
-      rows = data.collect do |row|
+      
+      link = headers.collect{|o| group.include?(o) } #use the grouping statement as an indicator of whether there are futher details
+      path = request.path.split('/')
+      rows = res[1..-1].collect do |row|
         #TODO only want base urls for high-heirarchy levels...
-        #TODO don't want links on the lowest level of the hierarhcy levels
-        '<td>' + (0..row.length).collect{|i| link[i] ? "<a href=\"#{request.path + "/#{row[i]}"}\">#{row[i]}</a>" : row[i]  }.join('</td><td>') + '</td>' #TODO make the districts/etc. links to look at further parts of the hierarchy
+        #don't want links on the lowest level of the hierarhcy levels
+        '<td>' + (0..row.length).collect{|i| link[i] && i < link.rindex(true) ? "<a href=\"#{request.path + "/#{row[i]}"}\">#{row[i]}</a>" : row[i]  }.join('</td><td>') + '</td>' #TODO make the districts/etc. links to look at further parts of the hierarchy
       end
       row_html = '<tr>' + rows.join('</tr><tr>') + '</tr>'
+      
       body = page_title + table % [header_html, row_html]
     else
       body = '<p>Couldn\'t find anything with that designation.</p>'
@@ -378,7 +380,7 @@ get %r{/summary(/|(/[^ /]*){0,6})/?$} do
     ret = table_links_page('district,count(*) as reports', '', 'district')
   else
     names = params[:captures].first.split('/').slice(1..-1) #ignore the first one - it's empty
-    p names
+    #p names
     geo = {
       :district => names[0],
       :block => names[1],
@@ -400,12 +402,12 @@ get %r{/summary(/|(/[^ /]*){0,6})/?$} do
     query_vars.delete_if do |k,v|
       v == nil
     end
-    
-    select = geo.length == hierarchy.length ? '' : (hierarchy[0..geo.length].collect{|k,v| "#{k.to_s}"} + ['count(*) as reports']).compact.join(', ' )#TODO this will report incorrect results, basically randomly picking stuff from the group on the ['date'] + + ["#{query_vars[:operation]}(#{query_vars[:report]})"]
+    summary = query_vars[:operation] && query_vars[:report] ? ["#{query_vars[:operation]}(#{query_vars[:report]})"] : ['count(*) as reports']
+    select = geo.length == hierarchy.length ? '' : (hierarchy[0..geo.length].collect{|k,v| "#{k.to_s}"} + summary).compact.join(', ' )#TODO this will report incorrect results, basically randomly picking stuff from the group on the ['date'] + + ["#{query_vars[:operation]}(#{query_vars[:report]})"]
     where = geo.collect{|k,v| "#{k.to_s} = '#{v.to_s}'"}.join(' and ' )
     group = hierarchy[0..geo.length].collect{|k,v| "#{k.to_s}"}.join(', ' ) #do one more than the current level
     #puts "#{select} #{where} #{group}"
-    ret = table_links_page(select, where, group)
+    ret = table_links_page(hierarchy, select, where, group)
   end
 
   ret
