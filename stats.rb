@@ -164,7 +164,7 @@ helpers do
     select_sql = select.empty? ? ' * ' : select
     where_sql = where.empty? ? where : " where #{where} "
     group_sql = group.empty? ? group : " group by #{group} "
-    #p "select #{select_sql} from wb_sms_water #{where_sql} #{group_sql} limit 100"
+    p "select #{select_sql} from wb_sms_water #{where_sql} #{group_sql} limit 100"
     [r("select #{select_sql} from wb_sms_water #{where_sql} #{group_sql} limit 100"), count('', where, group) >= 100] #return the query and whether there are more results
   end
 
@@ -377,10 +377,16 @@ get %r{/summary(/|(/[^ /]*){0,7})/?$} do #do up to level of hierarchy
   ret = ''
   hierarchy = [:district, :block, :panchayat, :mouza, :hamlet, :code, :date]
   
-  if params[:captures] == nil || params[:captures].first.empty?
+  query_vars = process_params(params.reject{|k,v| k.to_sym == :captures })
+  #get rid of all nil values
+  query_vars.delete_if do |k,v|
+    v == nil
+  end
+  
+  if((params[:captures] == nil || params[:captures].first.empty?) && query_vars.length < 1)
     ret = table_links_page(hierarchy, 0, 'district,count(*) as reports', '', 'district')
   else
-    names = params[:captures].first.split('/').slice(1..-1) #ignore the first one - it's empty
+    names = params[:captures].first.split('/').slice(1..-1) || []#ignore the first one - it's empty
     geo = {
       :district => names[0],
       :block => names[1],
@@ -395,13 +401,9 @@ get %r{/summary(/|(/[^ /]*){0,7})/?$} do #do up to level of hierarchy
       v == nil
     end
     
-    query_vars = process_params(params.reject{|k,v| k.to_sym == :captures })
-    #get rid of all nil values
-    query_vars.delete_if do |k,v|
-      v == nil
-    end
-    summary = query_vars[:operation] && query_vars[:report] ? ["#{query_vars[:operation]}(#{query_vars[:report]})"] : ['count(*) as reports']
-    select = geo.length == hierarchy.length ? '' : (hierarchy[0..geo.length].collect{|k,v| "#{k.to_s}"} + summary).compact.join(', ' )#TODO this will report incorrect results, basically randomly picking stuff from the group on the ['date'] + + ["#{query_vars[:operation]}(#{query_vars[:report]})"]
+    p query_vars
+    summary = query_vars[:report] ? ["#{query_vars[:operation] || 'count'}(#{query_vars[:report]})"] : ['count(*) as reports']
+    select = geo.length == hierarchy.length && !query_vars[:report]? '' : (hierarchy[0..geo.length].collect{|k,v| "#{k.to_s}"} + summary).compact.join(', ' )#TODO this will report incorrect results, basically randomly picking stuff from the group on the ['date'] + + ["#{query_vars[:operation]}(#{query_vars[:report]})"]
     where = geo.collect{|k,v| "#{k.to_s} = '#{v.to_s}'"}.join(' and ' )
     #decide what level we're at and then display the groups of the next level
     group = hierarchy[0..geo.length].collect{|k,v| "#{k.to_s}"}.join(', ' ) #do one more than the current level
@@ -433,6 +435,10 @@ get '/repeats' do
 
   PREFIX + (HEAD % html_title) + (BODY % body) + SUFFIX
 end
+
+#get '/gt/:level' do #greater than
+#  
+#end
 
 #get '/correleation/'
 #...
