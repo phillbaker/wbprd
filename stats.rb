@@ -199,25 +199,30 @@ helpers do
     PREFIX + (HEAD % html_title) + (BODY % body) + SUFFIX
   end
   
+  #this makes some assumptions about the order of the items in select/where/group
   def table_links_page(select = '', where = '', group = '')
     res,more = data(select, where, group)
     
     html_title = 'data'
     #request.path
-    page_title = '<h1>Data dump!</h1>' + (more ? '<h2>(there\'s more than this...)</h2>' : '')
-    table = '<table><tr>%s</tr>%s</table>'
-    headers = res[0]
-    link = headers.collect{|o| group.include?(o) }
-    header_html = '<th>' + headers.join('</th><th>') + '</th>' #TODO put in explanations of what these are/units
-    #header_html = headers.inject('<th>')
-    data = res[1..-1]
-    rows = data.collect do |row|
-      #TODO only want base urls for high-heirarchy levels...
-      #TODO don't want links on the lowest level of the hierarhcy levels
-      '<td>' + (0..row.length).collect{|i| link[i] ? "<a href=\"#{request.path + "/#{row[i]}"}\">#{row[i]}</a>" : row[i]  }.join('</td><td>') + '</td>' #TODO make the districts/etc. links to look at further parts of the hierarchy
+    page_title = '<h1>Well Finder</h1>' + (more ? '<h2>(there\'s more than this...)</h2>' : '')
+    if(res.length > 1)
+      table = '<table><tr>%s</tr>%s</table>'
+      headers = res[0]
+      link = headers.collect{|o| group.include?(o) }
+      header_html = '<th>' + headers.join('</th><th>') + '</th>' #TODO put in explanations of what these are/units
+      #header_html = headers.inject('<th>')
+      data = res[1..-1]
+      rows = data.collect do |row|
+        #TODO only want base urls for high-heirarchy levels...
+        #TODO don't want links on the lowest level of the hierarhcy levels
+        '<td>' + (0..row.length).collect{|i| link[i] ? "<a href=\"#{request.path + "/#{row[i]}"}\">#{row[i]}</a>" : row[i]  }.join('</td><td>') + '</td>' #TODO make the districts/etc. links to look at further parts of the hierarchy
+      end
+      row_html = '<tr>' + rows.join('</tr><tr>') + '</tr>'
+      body = page_title + table % [header_html, row_html]
+    else
+      body = '<p>Couldn\'t find anything with that designation.</p>'
     end
-    row_html = '<tr>' + rows.join('</tr><tr>') + '</tr>'
-    body = page_title + table % [header_html, row_html]
     
     PREFIX + (HEAD % html_title) + (BODY % body) + SUFFIX
   end
@@ -320,6 +325,15 @@ end
 #/data/?(.*/?){0,6}
 #/data(/.*)?
 #/data$|/data/(.*/?){1,3}
+#/data
+#/data/
+#/data/1
+#/data/1/2/3
+#/data/1/2/3/4/5/
+#/data/1/2/3/4/5/6
+#/data/1/2/3/4/5/6/7
+#/data1235
+
 get %r{/data$|/data/(.*/?)} do #':district/:block/:panchayat/:mouza/:hamlet/:well' do
   ret = ''
 
@@ -357,13 +371,14 @@ get %r{/data$|/data/(.*/?)} do #':district/:block/:panchayat/:mouza/:hamlet/:wel
   ret
 end
 
-get %r{/summary$|/summary/(.*/?)} do
+get %r{/summary(/|(/[^ /]*){0,6})/?$} do
   ret = ''
-  
+
   if params[:captures] == nil || params[:captures].first.empty?
     ret = table_links_page('district,count(*) as reports', '', 'district')
   else
-    names = params[:captures].first.split('/')
+    names = params[:captures].first.split('/').slice(1..-1) #ignore the first one - it's empty
+    p names
     geo = {
       :district => names[0],
       :block => names[1],
@@ -386,7 +401,7 @@ get %r{/summary$|/summary/(.*/?)} do
       v == nil
     end
     
-    select = (hierarchy[0..geo.length].collect{|k,v| "#{k.to_s}"} + ['count(*) as reports']).compact.join(', ' )#TODO this will report incorrect results, basically randomly picking stuff from the group on the ['date'] + + ["#{query_vars[:operation]}(#{query_vars[:report]})"]
+    select = geo.length == hierarchy.length ? '' : (hierarchy[0..geo.length].collect{|k,v| "#{k.to_s}"} + ['count(*) as reports']).compact.join(', ' )#TODO this will report incorrect results, basically randomly picking stuff from the group on the ['date'] + + ["#{query_vars[:operation]}(#{query_vars[:report]})"]
     where = geo.collect{|k,v| "#{k.to_s} = '#{v.to_s}'"}.join(' and ' )
     group = hierarchy[0..geo.length].collect{|k,v| "#{k.to_s}"}.join(', ' ) #do one more than the current level
     #puts "#{select} #{where} #{group}"
