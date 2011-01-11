@@ -210,13 +210,26 @@ helpers do
         #only want base urls for high-heirarchy levels
         #don't want links on the lowest level of the hierarhcy levels
         #TODO pass the query params of the url onto the next one
-        '<td>' + (0..row.length).collect{|i| link[i] ? "<a href=\"#{path[0..hierarchy.index(headers[i].to_sym)+1].join('/') + "/#{row[i]}"}\">#{row[i]}</a>" : row[i]  }.join('</td><td>') + "</td>\n"
+        ret = '<td>'
+        (0..row.length).each do |i| 
+          if(link[i]) 
+            #TODO fix :all for last links
+            url = path[0..hierarchy.index(headers[i].to_sym)+1].collect{|o| !o.empty? && o.to_sym == :':all' ? row[i-1] : o }
+            #grab the path for where we are in the row
+            ret += "<a href=\"#{url.join('/') + "/#{row[i]}"}\">#{row[i]}</a>"
+          else
+            ret += row[i].to_s
+          end
+          ret += '</td><td>'
+        end
+        ret +=  "</td>\n"
+        ret
       end
       row_html = '<tr>' + rows.join('</tr><tr>') + '</tr>'
       
       body = page_title + "<p class=\"headnote\"><a href=\"#{path[0..1].join('/')}\">Top summary level</a></p>\n" + table % [header_html, row_html]
     else
-      body = '<p>Couldn\'t find anything with that designation.</p>' #TODO or do 404?
+      body = '<p>Couldn\'t find anything with that designation.</p>' #TODO this or do 404?
     end
     
     PREFIX + (HEAD % html_title) + (BODY % body) + SUFFIX
