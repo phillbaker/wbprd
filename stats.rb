@@ -20,7 +20,7 @@ DATABASE_FILE = 'wb_sms_water.sqlite'
 
 #HTML constants
 PREFIX = '<html>'
-BRAINS = '<style type="text/css">body{ background-color: #ddd; font-size: 2em; font-family: sans-serif; text-align: center; padding: 1em; } .special { background-color: #333; color: #fff; padding: .33em .33em .25em .25em; font-weight: bold; font-size: 1.25em; } .notes { font-size: .5em; }</style>' #.special:hover { text-decoration: underline; }
+BRAINS = '<style type="text/css">body{ background-color: #ddd; font-size: 2em; font-family: sans-serif; text-align: center; padding: 1em; } .special { background-color: #333; color: #fff; padding: .33em .33em .25em .25em; font-weight: bold; font-size: 1.25em; } .footnote { font-size: .5em; } .headnote { font-size: .5em; text-align: left; }</style>' #.special:hover { text-decoration: underline; }
 HEAD = "<head>\n\t<title>West Bengal SMS Water Reports: %s</title>\n #{BRAINS} </head>\n"
 BODY = '<body>%s</body>'
 SUFFIX = '</html>'
@@ -164,7 +164,7 @@ helpers do
     select_sql = select.empty? ? ' * ' : select
     where_sql = where.empty? ? where : " where #{where} "
     group_sql = group.empty? ? group : " group by #{group} "
-    #{}"select #{select_sql} from wb_sms_water #{where_sql} #{group_sql} limit 100"
+    #p "select #{select_sql} from wb_sms_water #{where_sql} #{group_sql} limit 100"
     [r("select #{select_sql} from wb_sms_water #{where_sql} #{group_sql} limit 100"), count('', where, group) >= 100] #return the query and whether there are more results
   end
 
@@ -173,7 +173,7 @@ helpers do
 
     page_title = '<h1>Lumin Reports</h1><h2>(West Bengal SMS Data)</h2>'
     p1 = counts('', '', '')
-    p2 = "<p class=\"notes\">For example, see this <a href=\"/?operation=histogram\">histogram</a>.</p>"
+    p2 = "<p class=\"footnote\">For example, see this <a href=\"/?operation=histogram\">histogram</a>.</p>"
     body = page_title + p1 + p2
 
     PREFIX + (HEAD % html_title) + (BODY % body) + SUFFIX
@@ -212,20 +212,16 @@ helpers do
       header_html = '<th>' + headers.join('</th><th>') + '</th>' #TODO put in explanations of what these are/units
       #header_html = headers.inject('<th>')
       
-      #hierarchy.index(o.to_sym) < hierarchy.length-1
-      #&& (current_level + hierarchy.index(o.to_sym)) < ((hierarchy.length-1) * 2)
-      puts current_level
-      p hierarchy
       link = headers.collect{|o| hierarchy.include?(o.to_sym) && (current_level + hierarchy.index(o.to_sym)) < hierarchy.length * 2 - 1 } #everything but the last one
       path = request.path.split('/')
       rows = res[1..-1].collect do |row|
         #TODO only want base urls for high-heirarchy levels...
         #don't want links on the lowest level of the hierarhcy levels
-        '<td>' + (0..row.length).collect{|i| link[i] ? "<a href=\"#{path[0..hierarchy.index(headers[i].to_sym)+1].join('/') + "/#{row[i]}"}\">#{row[i]}</a>" : row[i]  }.join('</td><td>') + '</td>' #TODO make the districts/etc. links to look at further parts of the hierarchy
+        '<td>' + (0..row.length).collect{|i| link[i] ? "<a href=\"#{path[0..hierarchy.index(headers[i].to_sym)+1].join('/') + "/#{row[i]}"}\">#{row[i]}</a>" : row[i]  }.join('</td><td>') + "</td>\n" #TODO make the districts/etc. links to look at further parts of the hierarchy
       end
       row_html = '<tr>' + rows.join('</tr><tr>') + '</tr>'
       
-      body = page_title + table % [header_html, row_html]
+      body = page_title + "<p class=\"headnote\"><a href=\"#{path[0..1].join('/')}\">Top summary level</a></p>\n" + table % [header_html, row_html]
     else
       body = '<p>Couldn\'t find anything with that designation.</p>'
     end
@@ -238,7 +234,7 @@ helpers do
 
     page_title = '<h1>Counts of SMS Water Data (West Bengal)</h2>'
     p1 = counts(select, where, group)
-    p2 = "<p class=\"notes\">For example, see this <a href=\"/?operation=histogram\">histogram</a>.</p>"
+    p2 = "<p class=\"footnote\">For example, see this <a href=\"/?operation=histogram\">histogram</a>.</p>"
     body = page_title + p1 + p2
 
     PREFIX + (HEAD % html_title) + (BODY % body) + SUFFIX
@@ -251,7 +247,7 @@ helpers do
 
     image = histogram(where)
 
-    p1 = '<p class="notes">This is a histogram of all of the data. Go <a href="/">home</a>.</p>'
+    p1 = '<p class="footnote">This is a histogram of all of the data. Go <a href="/">home</a>.</p>'
 
     body = page_title + image + p1
 
@@ -377,28 +373,27 @@ get %r{/data$|/data/(.*/?)} do #':district/:block/:panchayat/:mouza/:hamlet/:wel
   ret
 end
 
-get %r{/summary(/|(/[^ /]*){0,6})/?$} do
+get %r{/summary(/|(/[^ /]*){0,7})/?$} do #do up to level of hierarchy
   ret = ''
-  hierarchy = [:district, :block, :panchayat, :mouza, :hamlet, :code]
+  hierarchy = [:district, :block, :panchayat, :mouza, :hamlet, :code, :date]
   
   if params[:captures] == nil || params[:captures].first.empty?
     ret = table_links_page(hierarchy, 0, 'district,count(*) as reports', '', 'district')
   else
     names = params[:captures].first.split('/').slice(1..-1) #ignore the first one - it's empty
-    #p names
     geo = {
       :district => names[0],
       :block => names[1],
       :panchayat => names[2],
       :mouza => names[3],
       :hamlet => names[4],
-      :code => names[5] #ie well
+      :code => names[5], #ie well
+      :date => names[6] #implicit date level with specific report
     }
     #get rid of all nil values
     geo.delete_if do |k,v|
       v == nil
     end
-    
     
     query_vars = process_params(params.reject{|k,v| k.to_sym == :captures })
     #get rid of all nil values
@@ -422,7 +417,7 @@ get '/dups' do
 
   page_title = '<h1>Duplicates in SMS Water Data (West Bengal)</h2>'
   p1 = "<p>There are currently #{q("select count(*) from (select date,district,block,panchayat,mouza,type,source,hamlet,lab,code,arsenic,tds,salinity,fluoride,iron,tc,fc,ph,hardness,count(*) as count from wb_sms_water group by date,district,block,panchayat,mouza,type,source,hamlet,lab,code,arsenic,tds,salinity,fluoride,iron,tc,fc,ph,hardness having count > 1)").to_i} duplicate entries in the dataset.</p>"
-  p2 = "<p class=\"notes\">If there's more than one, that should be fixed!</p>"
+  p2 = "<p class=\"footnote\">If there's more than one, that should be fixed!</p>"
   body = page_title + p1 + p2
 
   PREFIX + (HEAD % html_title) + (BODY % body) + SUFFIX
@@ -433,7 +428,7 @@ get '/repeats' do
 
   page_title = '<h1>Duplicates in SMS Water Data (West Bengal)</h2>'
   p1 = "<p>There are currently #{q("select count(*) from (select district,block,panchayat,mouza,hamlet,code,date,count(*) as count from wb_sms_water group by district,block,panchayat,mouza,hamlet,code,date) where count > 1").to_i} repeated sites in the dataset.</p>"
-  p2 = "<p class=\"notes\">For an example, dig into the <a href=\"/data\">data</a>.</p>"
+  p2 = "<p class=\"footnote\">For an example, dig into the <a href=\"/data\">data</a>.</p>"
   body = page_title + p1 + p2
 
   PREFIX + (HEAD % html_title) + (BODY % body) + SUFFIX
