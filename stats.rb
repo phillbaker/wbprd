@@ -200,7 +200,7 @@ helpers do
   end
   
   #this makes some assumptions about the order of the items in select/where/group
-  def table_links_page(hierarchy, select = '', where = '', group = '')
+  def table_links_page(hierarchy, current_level, select = '', where = '', group = '')
     res,more = data(select, where, group)
 
     html_title = 'data'
@@ -212,12 +212,16 @@ helpers do
       header_html = '<th>' + headers.join('</th><th>') + '</th>' #TODO put in explanations of what these are/units
       #header_html = headers.inject('<th>')
       
-      link = headers.collect{|o| group.include?(o) } #use the grouping statement as an indicator of whether there are futher details
+      #hierarchy.index(o.to_sym) < hierarchy.length-1
+      #&& (current_level + hierarchy.index(o.to_sym)) < ((hierarchy.length-1) * 2)
+      puts current_level
+      p hierarchy
+      link = headers.collect{|o| hierarchy.include?(o.to_sym) && (current_level + hierarchy.index(o.to_sym)) < hierarchy.length * 2 - 1 } #everything but the last one
       path = request.path.split('/')
       rows = res[1..-1].collect do |row|
         #TODO only want base urls for high-heirarchy levels...
         #don't want links on the lowest level of the hierarhcy levels
-        '<td>' + (0..row.length).collect{|i| link[i] && i < link.rindex(true) ? "<a href=\"#{request.path + "/#{row[i]}"}\">#{row[i]}</a>" : row[i]  }.join('</td><td>') + '</td>' #TODO make the districts/etc. links to look at further parts of the hierarchy
+        '<td>' + (0..row.length).collect{|i| link[i] ? "<a href=\"#{path[0..hierarchy.index(headers[i].to_sym)+1].join('/') + "/#{row[i]}"}\">#{row[i]}</a>" : row[i]  }.join('</td><td>') + '</td>' #TODO make the districts/etc. links to look at further parts of the hierarchy
       end
       row_html = '<tr>' + rows.join('</tr><tr>') + '</tr>'
       
@@ -375,9 +379,10 @@ end
 
 get %r{/summary(/|(/[^ /]*){0,6})/?$} do
   ret = ''
-
+  hierarchy = [:district, :block, :panchayat, :mouza, :hamlet, :code]
+  
   if params[:captures] == nil || params[:captures].first.empty?
-    ret = table_links_page('district,count(*) as reports', '', 'district')
+    ret = table_links_page(hierarchy, 0, 'district,count(*) as reports', '', 'district')
   else
     names = params[:captures].first.split('/').slice(1..-1) #ignore the first one - it's empty
     #p names
@@ -394,8 +399,6 @@ get %r{/summary(/|(/[^ /]*){0,6})/?$} do
       v == nil
     end
     
-    #decide what level we're at and then display the groups of the next level
-    hierarchy = [:district, :block, :panchayat, :mouza, :hamlet, :code]
     
     query_vars = process_params(params.reject{|k,v| k.to_sym == :captures })
     #get rid of all nil values
@@ -405,9 +408,10 @@ get %r{/summary(/|(/[^ /]*){0,6})/?$} do
     summary = query_vars[:operation] && query_vars[:report] ? ["#{query_vars[:operation]}(#{query_vars[:report]})"] : ['count(*) as reports']
     select = geo.length == hierarchy.length ? '' : (hierarchy[0..geo.length].collect{|k,v| "#{k.to_s}"} + summary).compact.join(', ' )#TODO this will report incorrect results, basically randomly picking stuff from the group on the ['date'] + + ["#{query_vars[:operation]}(#{query_vars[:report]})"]
     where = geo.collect{|k,v| "#{k.to_s} = '#{v.to_s}'"}.join(' and ' )
+    #decide what level we're at and then display the groups of the next level
     group = hierarchy[0..geo.length].collect{|k,v| "#{k.to_s}"}.join(', ' ) #do one more than the current level
     #puts "#{select} #{where} #{group}"
-    ret = table_links_page(hierarchy, select, where, group)
+    ret = table_links_page(hierarchy, geo.length, select, where, group)
   end
 
   ret
