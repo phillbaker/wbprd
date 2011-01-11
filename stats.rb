@@ -396,7 +396,7 @@ get %r{/summary(/|(/[^ /]*){0,7})/?$} do #do up to level of hierarchy
     #p query_vars
     summary = query_vars[:report] ? ["#{query_vars[:operation] || 'count'}(#{query_vars[:report]})"] : ['count(*) as reports']
     select = geo.length == hierarchy.length && !query_vars[:report]? '' : (hierarchy[0..geo.length].collect{|k,v| "#{k.to_s}"} + summary).compact.join(', ' )
-    where = geo.collect{|k,v| "#{k.to_s} = '#{v.to_s}'"}.join(' and ' )
+    where = geo.reject{|k,v| v.to_sym == :':all' }.collect{|k,v| "#{k.to_s} = '#{v.to_s}'"}.join(' and ' )
     #decide what level we're at and then display the groups of the next level
     group = hierarchy[0..geo.length].collect{|k,v| "#{k.to_s}"}.join(', ' ) #do one more than the current level
     #puts "#{select} #{where} #{group}"
