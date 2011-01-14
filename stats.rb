@@ -7,6 +7,7 @@
 #
 #TODO I'd like to automatically make a url-map or something that shows to which urls this code responds
 #TODO use https://github.com/mattetti/googlecharts
+#TODO put in a sort/order by
 ##########
 
 require 'rubygems'
@@ -71,7 +72,7 @@ helpers do
       :report => [:arsenic,:tds,:salinity,:fluoride,:iron,:tc,:fc,:ph,:hardness,nil], #:all, :date?
       :time => [nil], 
       :operation => [:count, :avg, :max, :min, :histogram],
-      :gt => [Float]
+      :gt => Numeric
     }
     #convert string values of keys to symbols and then load it into defaults
     ret = defaults.merge(opts.inject({}){|hsh,(k,v)| hsh[k.to_sym] = v; hsh}) 
@@ -93,10 +94,12 @@ helpers do
   def check_allowed_param(default, allowed, curr)
     ret = default
     if curr
-      if(allowed.is_a?(Class))
+      if(allowed == Numeric)#TODO this is really just a filter on certain parameter types
+        ret = curr.gsub(/[^ \d\.]/, '')#eliminate any non-digits or points
+        #TODO probably shouldn't simply ignore this, but throw an error...
         #something like: ret = allowed.convert(curr.to_s) if allowed.convert?(curr.to_s)
       else
-        sym = curr.to_s.downcase.to_sym
+        sym = curr.to_s.strip.downcase.to_sym
         ret = sym if allowed.include?(sym) #this shouldn't fail silently...
       end
       #TODOraise NotDoneYet, curr.to_s unless allowed.include?(sym)
@@ -226,10 +229,10 @@ helpers do
           end
           ret += '</td><td>'
         end
-        ret +=  "</td>\n"
+        ret +=  '</td>'
         ret
       end
-      row_html = '<tr>' + rows.join('</tr><tr>') + '</tr>'
+      row_html = "\n<tr>#{rows.join("</tr>\n<tr>")}</tr>\n"
       
       body = page_title + "<p class=\"headnote\"><a href=\"#{path[0..1].join('/')}\">Top summary level</a></p>\n" + table % [header_html, row_html]
     else
@@ -416,9 +419,11 @@ get %r{/summary(/|(/[^ /]*){0,7})/?$} do #do up to level of hierarchy
     select = geo.length == hierarchy.length && !query_vars[:report]? '' : (hierarchy[0..geo.length].collect{|k,v| "#{k.to_s}"} + summary).compact.join(', ' )
     #:gt only matters when there's a :report? do it as a having?
     #grab the hierarchy except for :all and turn them into key/value pairs
-    where = geo.reject{|k,v| v.to_sym == :':all' }.collect{|k,v| "#{k.to_s} = '#{v.to_s}'"}.join(' and ' )
+    #TODO that decision to add the >= is sketchy...
+    where = (geo.reject{|k,v| v.to_sym == :':all' }.merge(query_vars[:gt] && query_vars[:report] ? { query_vars[:report].to_s+'>' => query_vars[:gt].to_f } : {})).collect{|k,v| "#{k.to_s}=#{k.is_a?(Numeric) ? v : "'#{v.to_s}'"}"}.join(' and ' )
     #decide what level we're at and then display the groups of the next level
     #TODO think I don't want to do one more than geo.length with :all
+    #(geo.values.include?(':all') ? geo.length - 1 : geo.length)
     group = hierarchy[0..geo.length].collect{|k,v| "#{k.to_s}"}.join(', ' ) #do one more than the current level
     #puts "#{select} #{where} #{group}"
     #TODO is there a way to programatically turn the structured query into prose to do a table description?
