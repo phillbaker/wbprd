@@ -57,7 +57,7 @@ helpers do
   #sanizite and set to known state for query params
   def process_params(opts)
     #nil should default to all for most of these, use empty strings here so we can check for allowed values easily below
-    defaults = { #really, they're all nil
+    defaults = { #really, they're all nil, don't need any of this
       :type => nil, #public/private/both
       :report => nil, #what contaminant to report on, nil is simply a record in the db (ie all)
       :time => nil, #defaults to all records in existence
@@ -85,6 +85,7 @@ helpers do
     ret[:time] = check_allowed_param(defaults[:time], allowed_options[:time], ret[:time])
     #check the operation,
     ret[:operation] = check_allowed_param(defaults[:operation], allowed_options[:operation], ret[:operation])
+    ret[:gt] = check_allowed_param(defaults[:gt], allowed_options[:gt], ret[:gt])
     ret
   end
   
@@ -92,8 +93,12 @@ helpers do
   def check_allowed_param(default, allowed, curr)
     ret = default
     if curr
-      sym = curr.to_s.downcase.to_sym
-      ret = sym if allowed.include?(sym) #this shouldn't fail silently...
+      if(allowed.is_a?(Class))
+        #something like: ret = allowed.convert(curr.to_s) if allowed.convert?(curr.to_s)
+      else
+        sym = curr.to_s.downcase.to_sym
+        ret = sym if allowed.include?(sym) #this shouldn't fail silently...
+      end
       #TODOraise NotDoneYet, curr.to_s unless allowed.include?(sym)
     end
     ret
@@ -213,7 +218,6 @@ helpers do
         ret = '<td>'
         (0..row.length).each do |i| 
           if(link[i]) 
-            #TODO fix :all for last links
             url = path[0..hierarchy.index(headers[i].to_sym)+1].collect{|o| !o.empty? && o.to_sym == :':all' ? row[i-1] : o }
             #grab the path for where we are in the row
             ret += "<a href=\"#{url.join('/') + "/#{row[i]}"}\">#{row[i]}</a>"
@@ -407,12 +411,18 @@ get %r{/summary(/|(/[^ /]*){0,7})/?$} do #do up to level of hierarchy
     end
     
     #p query_vars
+    #TODO if count is only one (for all of them?), then we should display the value by default with :report, instead of a count, maybe on :all?
     summary = query_vars[:report] ? ["#{query_vars[:operation] || 'count'}(#{query_vars[:report]})"] : ['count(*) as reports']
     select = geo.length == hierarchy.length && !query_vars[:report]? '' : (hierarchy[0..geo.length].collect{|k,v| "#{k.to_s}"} + summary).compact.join(', ' )
+    #:gt only matters when there's a :report? do it as a having?
+    #grab the hierarchy except for :all and turn them into key/value pairs
     where = geo.reject{|k,v| v.to_sym == :':all' }.collect{|k,v| "#{k.to_s} = '#{v.to_s}'"}.join(' and ' )
     #decide what level we're at and then display the groups of the next level
+    #TODO think I don't want to do one more than geo.length with :all
     group = hierarchy[0..geo.length].collect{|k,v| "#{k.to_s}"}.join(', ' ) #do one more than the current level
     #puts "#{select} #{where} #{group}"
+    #TODO is there a way to programatically turn the structured query into prose to do a table description?
+    #TODO assuming the below becomes a template, should probably not pass the hierarchy or geo.length, do the processing here
     ret = table_links_page(hierarchy, geo.length, select, where, group)
   end
 
