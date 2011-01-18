@@ -1,0 +1,32 @@
+Purpose
+=======
+
+This is a simple, Sinatra based web-based tool to explore and deliver the data in wb_sms_water.sqlite. 
+Lumin is a team based out of the Integrated Product Design (IPD) program at the University of Pennsylvania.
+
+Setup
+=========
+
+Download. (This data was downloaded from the government's website at http://72.26.224.173/water/Default.aspx, saved as an Excel file, then as an CSV file and imported into the sqlite file via `ruby csv_to_sql.rb wb_sms_water.csv wb_sms_water`.)
+Run with `ruby stats.rb.`
+
+Running the tests
+=================
+
+TODO
+
+Disclaimer
+=========
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+Dependencies
+============
+
+* `sinatra 1.1.2`_
+* `FasterCSV `_
+
+License
+=======
+
+This is free software, available under the BSD license.
