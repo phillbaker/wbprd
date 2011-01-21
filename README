@@ -24,6 +24,7 @@ Dependencies
 ============
 
 * `sinatra 1.1.2`_
+* `ruby-sqlite3`_
 * `FasterCSV `_
 
 License
