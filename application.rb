@@ -214,7 +214,7 @@ class WbprdStats < Sinatra::Application
         #header_html = headers.inject('<th>')
       
         link = headers.collect{|o| hierarchy.include?(o.to_sym) && (current_level + hierarchy.index(o.to_sym)) < hierarchy.length * 2 - 1 } #everything but the last one
-        path = request.path.split('/')
+        path = request.path_info.split('/')
         rows = res[1..-1].collect do |row|
           #only want base urls for high-heirarchy levels
           #don't want links on the lowest level of the hierarhcy levels
@@ -311,7 +311,7 @@ class WbprdStats < Sinatra::Application
   # Routes
   ##########
 
-  get '/dispatch.fcgi' do 
+  get '/' do 
     query_vars = process_params(params)
   
     #get rid of all nil values
