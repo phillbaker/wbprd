@@ -311,7 +311,7 @@ class WbprdStats < Sinatra::Application
   # Routes
   ##########
 
-  get '/' do 
+  get '/dispatch.fcgi' do 
     query_vars = process_params(params)
   
     #get rid of all nil values
