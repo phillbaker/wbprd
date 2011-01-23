@@ -3,7 +3,6 @@
 begin
   require 'rubygems'
   require 'rack'
-  require 'fcgi'
   require 'application.rb'
 
   Rack::Handler::CGI.run(MySinatraApp)
