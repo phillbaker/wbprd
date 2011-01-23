@@ -5,7 +5,7 @@ begin
   require 'rack'
   require 'application.rb'
 
-  Rack::Handler::CGI.run(MySinatraApp)
+  Rack::Handler::CGI.run(WbprdStats)
 rescue Exception => e
   puts "Content-type: text/plain \n\n #{e}"
   puts e.class.to_s
